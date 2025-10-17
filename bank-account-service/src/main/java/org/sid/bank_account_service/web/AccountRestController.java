@@ -1,61 +1,73 @@
 package org.sid.bank_account_service.web;
-
+import lombok.RequiredArgsConstructor;
+import org.sid.bank_account_service.dto.BankAccountRequestDTO;
+import org.sid.bank_account_service.dto.BankAccountResponseDTO;
 import org.sid.bank_account_service.entities.BankAccount;
 import org.sid.bank_account_service.repositories.BankAccountRepository;
+import org.sid.bank_account_service.service.AccountService;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
-import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 @RestController
+@RequestMapping("/api/v1")
+@RequiredArgsConstructor
 public class AccountRestController {
 
     private final BankAccountRepository bankAccountRepository;
+    private final AccountService accountService;
 
-
-    public AccountRestController(BankAccountRepository bankAccountRepository) {
-        this.bankAccountRepository = bankAccountRepository;
-    }
-
-
+    // ✅ Récupérer tous les comptes
     @GetMapping("/bankAccounts")
-    public List<BankAccount> getAllBankAccounts() {
-        return bankAccountRepository.findAll();
+    public ResponseEntity<List<BankAccount>> bankAccounts() {
+        List<BankAccount> accounts = bankAccountRepository.findAll();
+        return ResponseEntity.ok(accounts);
     }
 
-
+    // ✅ Récupérer un compte par ID
     @GetMapping("/bankAccounts/{id}")
-    public BankAccount getBankAccountById(@PathVariable String id) {
-        return bankAccountRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException(String.format("Account with ID %s not found", id)
-                ));
+    public ResponseEntity<BankAccount> bankAccount(@PathVariable String id) {
+        BankAccount account = bankAccountRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Account " + id + " not found"));
+        return ResponseEntity.ok(account);
     }
 
+    // ✅ Créer un compte bancaire
     @PostMapping("/bankAccounts")
-    public BankAccount save(@RequestBody BankAccount bankAccount) {
-        if (bankAccount.getId()  == null) bankAccount.setId(UUID.randomUUID().toString());
-        return bankAccountRepository.save(bankAccount);
-    }
-
-    @PutMapping("bankAccounts/{id}")
-
-    public BankAccount updateBankAccount(@PathVariable String id, @RequestBody BankAccount bankAccount) {
-        BankAccount account = bankAccountRepository.findById(id).orElseThrow();
-        if (bankAccount.getBalance() != null) account.setBalance(bankAccount.getBalance());
-        if (bankAccount.getCreatedAt()!=null) account.setCreatedAt(new Date());
-        if (bankAccount.getType()!=null) account.setType(bankAccount.getType());
-        if (bankAccount.getCurrency()!=null) account.setCurrency(bankAccount.getCurrency());
-        return bankAccountRepository.save(bankAccount);
-    }
-
-
-    @DeleteMapping("/bankAccounts/{id}")
-    public void deleteAccount (@PathVariable String id) {
-         bankAccountRepository.deleteById(id);
-    }
+    public ResponseEntity<BankAccountResponseDTO> save(@RequestBody BankAccountRequestDTO requestDTO) {
+        try {
+            BankAccountResponseDTO response = accountService.addAccount(requestDTO);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            // Log pour déboguer côté serveur
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().build();
         }
+    }
 
+    // ✅ Mettre à jour un compte
+    @PutMapping("/bankAccounts/{id}")
+    public ResponseEntity<BankAccount> update(@PathVariable String id, @RequestBody BankAccount bankAccount) {
+        BankAccount existing = bankAccountRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Account " + id + " not found"));
 
+        if (bankAccount.getBalance() != null) existing.setBalance(bankAccount.getBalance());
+        if (bankAccount.getCreatedAt() != null) existing.setCreatedAt(bankAccount.getCreatedAt());
+        if (bankAccount.getType() != null) existing.setType(bankAccount.getType());
+        if (bankAccount.getCurrency() != null) existing.setCurrency(bankAccount.getCurrency());
+
+        BankAccount updated = bankAccountRepository.save(existing);
+        return ResponseEntity.ok(updated);
+    }
+
+    // ✅ Supprimer un compte
+    @DeleteMapping("/bankAccounts/{id}")
+    public ResponseEntity<Void> deleteBankAccount(@PathVariable String id) {
+        if (!bankAccountRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        bankAccountRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+}
